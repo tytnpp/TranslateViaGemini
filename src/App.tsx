@@ -1,22 +1,18 @@
 import React, { useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { Card, CardContent } from "./component/ui/card";
-import { Button } from "./component/ui/button";
 import Bold from "@tiptap/extension-bold";
 import Italic from "@tiptap/extension-italic";
+import { Card, CardContent } from "./component/ui/card";
+import { Button } from "./component/ui/button";
 
 const App = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Thai Editor with extensions like Bold and Italic
+  // Thai Editor (editable)
   const thaiEditor = useEditor({
-    extensions: [
-      StarterKit,
-      Bold,
-      Italic,
-    ],
+    extensions: [StarterKit, Bold, Italic],
     content: "",
   });
 
@@ -30,56 +26,32 @@ const App = () => {
   const translateText = async () => {
     if (!thaiEditor) return;
     setLoading(true);
-    setError(null); // Reset error message before new request
+    setError(null);
 
     try {
-      const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error("API key is missing. Please set REACT_APP_GEMINI_API_KEY in your environment.");
-      }
+      const response = await fetch("http://localhost:8080/api/translate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          originalHtml: thaiEditor.getHTML(),
+        }),
+      });
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: `Translate the following Thai text to English, MUST contain only translated and format: ${thaiEditor.getHTML()}`, // ใช้ getHTML() เพื่อรักษาฟอร์แมต
-                  },
-                ],
-              },
-            ],
-          }),
-        }
-      );
-
-      // ตรวจสอบว่า request สำเร็จหรือไม่
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Translation failed: ${errorData.error?.message || "Unknown error"}`);
+        const errorText = await response.text();
+        throw new Error(`Translation failed: ${errorText}`);
       }
 
       const data = await response.json();
+      const translatedText = data.translatedHtml;
 
-      // Log the response to see its structure
-      console.log("API Response:", data);
-
-      // Access the translation from the candidates array
-      if (data.candidates && data.candidates.length > 0 && data.candidates[0].content.parts && data.candidates[0].content.parts.length > 0) {
-        const translatedText = data.candidates[0].content.parts[0].text; // The translated text is here
-        englishEditor?.commands.setContent(translatedText); // ใส่เนื้อหาที่แปลแล้วเข้า editor
-      } else {
-        throw new Error("No translation received from the API.");
-      }
-    } catch (error) {
-      if (error instanceof Error) {
-        setError(error.message);
+      // แสดงผลลัพธ์ที่แปลแล้ว
+      englishEditor?.commands.setContent(translatedText);
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
       } else {
         setError("An unknown error occurred.");
       }
@@ -92,38 +64,37 @@ const App = () => {
     <div className="container mx-auto p-4">
       <Card>
         <CardContent>
-          <h2 className="text-lg font-bold mb-2">แปลภาษาไทยเป็นอังกฤษ</h2>
+          <h2 className="text-lg font-bold mb-4">แปลภาษาไทยเป็นอังกฤษ</h2>
 
-          <div className="flex gap-4 mb-4">
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
             {/* Thai Editor */}
             <div className="flex-1">
-              <h3 className="font-medium">ภาษาไทย</h3>
+              <h3 className="font-medium mb-2">ภาษาไทย</h3>
               <EditorContent
                 editor={thaiEditor}
-                className="border-2 border-gray-300 p-4 rounded-lg shadow-sm"
+                className="border-2 border-gray-300 p-4 rounded-lg shadow-sm min-h-[160px]"
               />
-              {/* Add buttons for formatting */}
               <div className="mt-4">
                 <Button onClick={() => thaiEditor?.commands.toggleBold()} className="mr-2">
-                  B
+                  <strong>B</strong>
                 </Button>
-                <Button onClick={() => thaiEditor?.commands.toggleItalic()} className="mr-2">
-                  I
+                <Button onClick={() => thaiEditor?.commands.toggleItalic()}>
+                  <em>I</em>
                 </Button>
               </div>
             </div>
 
             {/* English Editor */}
             <div className="flex-1">
-              <h3 className="font-medium">English</h3>
+              <h3 className="font-medium mb-2">English</h3>
               <EditorContent
                 editor={englishEditor}
-                className="border-2 border-gray-300 p-4 rounded-lg shadow-sm"
+                className="border-2 border-gray-300 p-4 rounded-lg shadow-sm min-h-[160px] bg-gray-50"
               />
             </div>
           </div>
 
-          {error && <p className="text-red-500">{error}</p>} {/* แสดงข้อผิดพลาด */}
+          {error && <p className="text-red-500 mt-2">{error}</p>}
 
           <Button onClick={translateText} disabled={loading} className="mt-2">
             {loading ? "กำลังแปล..." : "แปลภาษา"}
