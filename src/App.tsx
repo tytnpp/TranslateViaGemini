@@ -6,55 +6,92 @@ import Italic from "@tiptap/extension-italic";
 import { Card, CardContent } from "./component/ui/card";
 import { Button } from "./component/ui/button";
 
+const Section = ({
+  title,
+  thaiEditor,
+  englishEditor,
+}: {
+  title: string;
+  thaiEditor: any;
+  englishEditor: any;
+}) => (
+  <div className="mb-8">
+    <h3 className="font-semibold mb-2">{title}</h3>
+    <div className="flex flex-col md:flex-row gap-4">
+      <div className="flex-1">
+        <p className="text-sm font-medium mb-1">ภาษาไทย</p>
+        <EditorContent
+          editor={thaiEditor}
+          className="border border-gray-300 rounded p-3 min-h-[120px]"
+        />
+        <div className="mt-2">
+          <Button
+            onClick={() => thaiEditor?.commands.toggleBold()}
+            className="mr-2"
+          >
+            <strong>B</strong>
+          </Button>
+          <Button onClick={() => thaiEditor?.commands.toggleItalic()}>
+            <em>I</em>
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex-1">
+        <p className="text-sm font-medium mb-1">English</p>
+        <EditorContent
+          editor={englishEditor}
+          className="border border-gray-300 rounded p-3 min-h-[120px] bg-gray-50"
+        />
+      </div>
+    </div>
+  </div>
+);
+
 const App = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Thai Editor (editable)
-  const thaiEditor = useEditor({
-    extensions: [StarterKit, Bold, Italic],
-    content: "",
-  });
+  // 🔸 Editor แต่ละช่อง
+  const thaiIntro = useEditor({ extensions: [StarterKit, Bold, Italic], content: "" });
+  const engIntro = useEditor({ extensions: [StarterKit], content: "", editable: false });
 
-  // English Editor (non-editable)
-  const englishEditor = useEditor({
-    extensions: [StarterKit],
-    content: "",
-    editable: false,
-  });
+  const thaiDetail = useEditor({ extensions: [StarterKit, Bold, Italic], content: "" });
+  const engDetail = useEditor({ extensions: [StarterKit], content: "", editable: false });
 
-  const translateText = async () => {
-    if (!thaiEditor) return;
+  const thaiNote = useEditor({ extensions: [StarterKit, Bold, Italic], content: "" });
+  const engNote = useEditor({ extensions: [StarterKit], content: "", editable: false });
+
+  // 🔁 แปลทีละช่อง
+  const translateSection = async (thaiEditor: any, englishEditor: any) => {
+    const html = thaiEditor?.getHTML();
+    if (!html) return;
+
+    const response = await fetch("http://localhost:8080/api/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ originalHtml: html }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      englishEditor?.commands.setContent(data.translatedHtml);
+    }
+  };
+
+  // 🔁 แปลทั้งหมด
+  const translateAll = async () => {
+    if (!thaiIntro || !thaiDetail || !thaiNote) return;
+
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch("http://localhost:8080/api/translate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          originalHtml: thaiEditor.getHTML(),
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Translation failed: ${errorText}`);
-      }
-
-      const data = await response.json();
-      const translatedText = data.translatedHtml;
-
-      // แสดงผลลัพธ์ที่แปลแล้ว
-      englishEditor?.commands.setContent(translatedText);
+      await translateSection(thaiIntro, engIntro);
+      await translateSection(thaiDetail, engDetail);
+      await translateSection(thaiNote, engNote);
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("An unknown error occurred.");
-      }
+      setError("เกิดข้อผิดพลาดในการแปล");
     } finally {
       setLoading(false);
     }
@@ -64,40 +101,30 @@ const App = () => {
     <div className="container mx-auto p-4">
       <Card>
         <CardContent>
-          <h2 className="text-lg font-bold mb-4">แปลภาษาไทยเป็นอังกฤษ</h2>
+          <h2 className="text-xl font-bold mb-6">แปลข้อความหลายช่อง</h2>
 
-          <div className="flex flex-col md:flex-row gap-4 mb-4">
-            {/* Thai Editor */}
-            <div className="flex-1">
-              <h3 className="font-medium mb-2">ภาษาไทย</h3>
-              <EditorContent
-                editor={thaiEditor}
-                className="border-2 border-gray-300 p-4 rounded-lg shadow-sm min-h-[160px]"
-              />
-              <div className="mt-4">
-                <Button onClick={() => thaiEditor?.commands.toggleBold()} className="mr-2">
-                  <strong>B</strong>
-                </Button>
-                <Button onClick={() => thaiEditor?.commands.toggleItalic()}>
-                  <em>I</em>
-                </Button>
-              </div>
-            </div>
+          <Section
+            title="🔹 คำโปรย (Intro)"
+            thaiEditor={thaiIntro}
+            englishEditor={engIntro}
+          />
 
-            {/* English Editor */}
-            <div className="flex-1">
-              <h3 className="font-medium mb-2">English</h3>
-              <EditorContent
-                editor={englishEditor}
-                className="border-2 border-gray-300 p-4 rounded-lg shadow-sm min-h-[160px] bg-gray-50"
-              />
-            </div>
-          </div>
+          <Section
+            title="🔹 รายละเอียด (Details)"
+            thaiEditor={thaiDetail}
+            englishEditor={engDetail}
+          />
+
+          <Section
+            title="🔹 หมายเหตุ (Notes)"
+            thaiEditor={thaiNote}
+            englishEditor={engNote}
+          />
 
           {error && <p className="text-red-500 mt-2">{error}</p>}
 
-          <Button onClick={translateText} disabled={loading} className="mt-2">
-            {loading ? "กำลังแปล..." : "แปลภาษา"}
+          <Button onClick={translateAll} disabled={loading}>
+            {loading ? "กำลังแปลทั้งหมด..." : "แปลข้อความทั้งหมด"}
           </Button>
         </CardContent>
       </Card>
